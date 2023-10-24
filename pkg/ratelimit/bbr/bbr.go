@@ -3,6 +3,7 @@ package bbr
 import (
 	"context"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,7 @@ var (
 type cpuGetter func() int64
 
 func init() {
+	return
 	go cpuproc()
 }
 
@@ -271,6 +273,10 @@ func NewGroup(conf *Config) *Group {
 	}
 	group := group.NewGroup(func() interface{} {
 		return newLimiter(conf)
+	})
+	var so = sync.Once{}
+	so.Do(func() {
+		go cpuproc()
 	})
 	return &Group{
 		group: group,
