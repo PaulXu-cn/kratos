@@ -2,6 +2,7 @@ package cpu
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,7 +22,35 @@ type CPU interface {
 	Info() Info
 }
 
+var initOne = (sync.Once{})
+
 func init() {
+	return
+	var (
+		err error
+	)
+	stats, err = newCgroupCPU()
+	if err != nil {
+		// fmt.Printf("cgroup cpu init failed(%v),switch to psutil cpu\n", err)
+		stats, err = newPsutilCPU(interval)
+		if err != nil {
+			panic(fmt.Sprintf("cgroup cpu init failed!err:=%v", err))
+		}
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			u, err := stats.Usage()
+			if err == nil && u != 0 {
+				atomic.StoreUint64(&usage, u)
+			}
+		}
+	}()
+}
+
+func initFunc() {
 	var (
 		err error
 	)
@@ -59,10 +88,12 @@ type Info struct {
 
 // ReadStat read cpu stat.
 func ReadStat(stat *Stat) {
+	initOne.Do(initFunc)
 	stat.Usage = atomic.LoadUint64(&usage)
 }
 
 // GetInfo get cpu info.
 func GetInfo() Info {
+	initOne.Do(initFunc)
 	return stats.Info()
 }
